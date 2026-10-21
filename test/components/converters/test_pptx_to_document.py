@@ -166,7 +166,8 @@ class TestPPTXToDocument:
         paragraph.add_run().text = "Slide "
         paragraph._p.append(
             parse_xml(
-                f'<a:fld {nsdecls("a")} id="{{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}}" type="slidenum"><a:t>3</a:t></a:fld>'
+                f'<a:fld {nsdecls("a")} id="{{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}}" type="slidenum">'
+                "<a:t>3</a:t></a:fld>"
             )
         )
         buffer = io.BytesIO()
