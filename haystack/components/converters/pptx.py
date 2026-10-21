@@ -17,6 +17,7 @@ from haystack.lazy_imports import LazyImport
 
 with LazyImport("Run 'pip install python-pptx'") as pptx_import:
     from pptx import Presentation
+    from pptx.oxml.ns import qn
     from pptx.shapes.autoshape import Shape
     from pptx.shapes.base import BaseShape
     from pptx.shapes.graphfrm import GraphicFrame
@@ -134,10 +135,17 @@ class PPTXToDocument:
         :param paragraph: The PPTX paragraph to process.
         :returns: A string with links formatted according to the specified format.
         """
+        # python-pptx reads a line break (`a:br`) as a vertical tab
         if self.link_format == "none":
-            return paragraph.text
+            return paragraph.text.replace("\v", "\n")
         parts = []
-        for run in paragraph.runs:
+        runs = iter(paragraph.runs)
+        # Line breaks (`a:br`) and fields such as a slide number (`a:fld`) sit between the runs
+        for child in paragraph._p.content_children:
+            if child.tag != qn("a:r"):
+                parts.append(child.text.replace("\v", "\n"))
+                continue
+            run = next(runs)
             if run.hyperlink and run.hyperlink.address:
                 if self.link_format == "markdown":
                     parts.append(f"[{run.text}]({run.hyperlink.address})")

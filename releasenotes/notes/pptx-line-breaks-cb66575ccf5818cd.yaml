@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed ``PPTXToDocument`` mishandling a line break inside a paragraph
+    (Shift+Enter in PowerPoint). With the default ``link_format="none"`` it
+    reached the text as a vertical tab (``\v``) instead of a newline. With
+    ``link_format="markdown"`` or ``"plain"`` it was dropped, so the words on
+    either side ran together (``Quarterlyresults``), and field text such as a
+    slide number was lost too. Line breaks now read as newlines in every link
+    format, including inside table cells.

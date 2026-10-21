@@ -2,11 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import io
 import logging
 import os
 from pathlib import Path
 
 import pytest
+from pptx import Presentation
+from pptx.util import Inches
 
 from haystack.components.converters.pptx import PPTXToDocument
 from haystack.dataclasses import ByteStream
@@ -123,6 +126,35 @@ class TestPPTXToDocument:
 
         assert "https://example.com" not in content
         assert "Example" in content
+
+    @pytest.mark.parametrize(
+        "link_format,expected",
+        [
+            ("none", 'Quarterly\nresults\n"Cell\nbreak"'),
+            ("markdown", 'Quarterly\n[results](https://example.com)\n"Cell\nbreak"'),
+            ("plain", 'Quarterly\nresults (https://example.com)\n"Cell\nbreak"'),
+        ],
+    )
+    def test_run_reads_line_breaks_as_newlines(self, link_format, expected):
+        # A line break (Shift+Enter) in a text box and in a table cell
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        paragraph = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1)).text_frame.paragraphs[0]
+        paragraph.add_run().text = "Quarterly"
+        paragraph.add_line_break()
+        run = paragraph.add_run()
+        run.text = "results"
+        run.hyperlink.address = "https://example.com"
+        cell = slide.shapes.add_table(1, 1, Inches(1), Inches(3), Inches(3), Inches(1)).table.cell(0, 0)
+        cell.text_frame.paragraphs[0].add_run().text = "Cell"
+        cell.text_frame.paragraphs[0].add_line_break()
+        cell.text_frame.paragraphs[0].add_run().text = "break"
+        buffer = io.BytesIO()
+        presentation.save(buffer)
+
+        documents = PPTXToDocument(link_format=link_format).run(sources=[ByteStream(buffer.getvalue())])["documents"]
+
+        assert documents[0].content == expected
 
     def test_run_reads_nested_groups_and_table_with_links(self, test_files_path):
         # The slide includes nested text groups, a grouped table, and an empty decorative shape.
