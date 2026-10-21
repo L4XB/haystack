@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 from pptx import Presentation
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import nsdecls
 from pptx.util import Inches
 
 from haystack.components.converters.pptx import PPTXToDocument
@@ -155,6 +157,24 @@ class TestPPTXToDocument:
         documents = PPTXToDocument(link_format=link_format).run(sources=[ByteStream(buffer.getvalue())])["documents"]
 
         assert documents[0].content == expected
+
+    def test_run_keeps_field_text_with_link_extraction(self):
+        # A slide-number field (`a:fld`) sits between the runs of the paragraph
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        paragraph = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1)).text_frame.paragraphs[0]
+        paragraph.add_run().text = "Slide "
+        paragraph._p.append(
+            parse_xml(
+                f'<a:fld {nsdecls("a")} id="{{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}}" type="slidenum"><a:t>3</a:t></a:fld>'
+            )
+        )
+        buffer = io.BytesIO()
+        presentation.save(buffer)
+
+        documents = PPTXToDocument(link_format="markdown").run(sources=[ByteStream(buffer.getvalue())])["documents"]
+
+        assert documents[0].content == "Slide 3"
 
     def test_run_reads_nested_groups_and_table_with_links(self, test_files_path):
         # The slide includes nested text groups, a grouped table, and an empty decorative shape.
