@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from unittest.mock import PropertyMock, patch
+
+from oxmsg import Message
+
 from haystack import Document
 from haystack.components.converters.msg import MSGToDocument
 from haystack.dataclasses import ByteStream
@@ -44,6 +48,26 @@ class TestMSGToDocument:
             "parent_file_path": str(test_files_path / "msg" / "sample.msg"),
             "file_path": "sample_pdf_1.pdf",
         }
+
+    def test_run_lists_only_to_recipients_on_the_to_line(self, test_files_path):
+        converter = MSGToDocument()
+        result = converter.run(sources=[test_files_path / "msg" / "sample.msg"])
+        lines = result["documents"][0].content.splitlines()
+
+        assert "To: Sebastian Lee sebastian.lee@deepset.ai" in lines
+        assert 'Cc: "sebastian.lee+cc@deepset.ai" <sebastian.lee+cc@deepset.ai>' in lines
+        assert 'Bcc: "sebastian.lee+bcc@deepset.ai" <sebastian.lee+bcc@deepset.ai>' in lines
+
+    def test_run_reads_cc_and_bcc_recipients_without_transport_headers(self, test_files_path):
+        # A sent item or a draft has no transport headers, only the recipient table
+        converter = MSGToDocument()
+        with patch.object(Message, "message_headers", new_callable=PropertyMock, return_value={}):
+            result = converter.run(sources=[test_files_path / "msg" / "sample.msg"])
+        lines = result["documents"][0].content.splitlines()
+
+        assert "To: Sebastian Lee sebastian.lee@deepset.ai" in lines
+        assert "Cc: sebastian.lee+cc@deepset.ai sebastian.lee+cc@deepset.ai" in lines
+        assert "Bcc: sebastian.lee+bcc@deepset.ai sebastian.lee+bcc@deepset.ai" in lines
 
     def test_run_wrong_file_type(self, test_files_path, caplog):
         converter = MSGToDocument(store_full_path=False)

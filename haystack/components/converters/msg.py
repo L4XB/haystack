@@ -14,9 +14,16 @@ from haystack.lazy_imports import LazyImport
 
 with LazyImport("Run 'pip install python-oxmsg'") as oxmsg_import:
     from oxmsg import Message, recipient
+    from oxmsg.domain.constants import PID_RECIPIENT_TYPE
 
 
 logger = logging.getLogger(__name__)
+
+# Recipient types of PidTagRecipientType. The property can carry flags in its higher bits.
+_MAPI_TO = 1
+_MAPI_CC = 2
+_MAPI_BCC = 3
+_RECIPIENT_TYPE_MASK = 0x0F
 
 
 @component
@@ -96,18 +103,30 @@ class MSGToDocument:
         if msg.sender is not None:
             txt += f"From: {msg.sender}\n"
 
+        # Recipients by type. A recipient without a type counts as a To recipient.
+        recipients_by_type: dict[int, list[str]] = {_MAPI_TO: [], _MAPI_CC: [], _MAPI_BCC: []}
+        for recip in msg.recipients:
+            recipient_type = (recip.properties.int_prop_value(PID_RECIPIENT_TYPE) or _MAPI_TO) & _RECIPIENT_TYPE_MASK
+            recipients_by_type.get(recipient_type, recipients_by_type[_MAPI_TO]).append(
+                self._create_recipient_str(recip)
+            )
+
         # To
-        recipients_str = ",".join(self._create_recipient_str(r) for r in msg.recipients)
+        recipients_str = ",".join(recipients_by_type[_MAPI_TO])
         if recipients_str != "":
             txt += f"To: {recipients_str}\n"
 
-        # CC
+        # CC, from the transport headers or, for a message without them, from the recipients
         cc_header = msg.message_headers.get("Cc") or msg.message_headers.get("CC")
+        if cc_header is None and recipients_by_type[_MAPI_CC]:
+            cc_header = ",".join(recipients_by_type[_MAPI_CC])
         if cc_header is not None:
             txt += f"Cc: {cc_header}\n"
 
-        # BCC
+        # BCC, from the transport headers or, for a message without them, from the recipients
         bcc_header = msg.message_headers.get("Bcc") or msg.message_headers.get("BCC")
+        if bcc_header is None and recipients_by_type[_MAPI_BCC]:
+            bcc_header = ",".join(recipients_by_type[_MAPI_BCC])
         if bcc_header is not None:
             txt += f"Bcc: {bcc_header}\n"
 

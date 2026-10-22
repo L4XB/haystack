@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    ``MSGToDocument`` now lists only the To recipients on the ``To:`` line. It used to list
+    every recipient of the message there, so Cc and Bcc recipients also appeared as To
+    recipients. A message without transport headers, such as a sent item or a draft, now
+    gets its ``Cc:`` and ``Bcc:`` lines from the recipients of those types, so they are not lost.
